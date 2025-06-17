@@ -5,7 +5,8 @@ import numpy as np
 app = Flask(__name__)
 
 # Load the model
-model = joblib.load("random_forest-model.pkl")
+model = joblib.load("random_forest_iris-model.pkl")
+
 
 # HTML Form Template
 html_form = """
