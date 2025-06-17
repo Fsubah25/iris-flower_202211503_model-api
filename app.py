@@ -1,9 +1,8 @@
-from os import name
 from flask import Flask, request, jsonify, render_template_string
 import joblib
 import numpy as np
 
-app = Flask(name)
+app = Flask(__name__)
 
 # Load the model
 model = joblib.load("random_forest-model.pkl")
@@ -102,16 +101,18 @@ def home():
 # REST API Endpoint
 @app.route("/predict", methods=["POST"])
 def api_predict():
-    if request.is_json:
-        data = request.get_json()
-        try:
-            features = np.array(data["features"]).reshape(1, -1)
-            prediction = model.predict(features)[0]
-            return jsonify({"prediction": int(prediction)})
-        except Exception as e:
-            return jsonify({"error": str(e)})
+    if not request.is_json:
+        return jsonify({"error": "Request must be in JSON format"}), 400
+
+    data = request.get_json()
+    try:
+        features = np.array(data["features"]).reshape(1, -1)
+        prediction = model.predict(features)[0]
+        return jsonify({"prediction": int(prediction)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     else:
         return home()  # Handle form submission
 
-if name == "main":
+if __name__ == "__main__":
     app.run(debug=True)
