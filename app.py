@@ -1,128 +1,73 @@
-from flask import Flask, request, jsonify, render_template_string
-import joblib
+from flask import Flask, request, jsonify, render_template
+import pickle
 import numpy as np
 
 app = Flask(__name__)
 
 # Load the model
-model = joblib.load("random_forest_iris-model.pkl")
+with open('model_202211503.pkl', 'rb') as file:
+    model = pickle.load(file)
 
- # Class labels for Iris dataset
-class_names = ['Iris-setosa', 'Iris-versicolor', 'Iris-virginica']
+# Feature names and target names
+feature_names = ['sepal length (cm)', 'sepal width (cm)', 
+                 'petal length (cm)', 'petal width (cm)']
+target_names = ['setosa', 'versicolor', 'virginica']
 
-# HTML Form Template
-html_form = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Iris Prediction</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            max-width: 500px;
-            margin: auto;
-            background: #f4f4f4;
-        }
-        h2 {
-            text-align: center;
-        }
-        form {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-        }
-        label {
-            display: block;
-            margin-top: 15px;
-        }
-        input[type="number"] {
-            width: 100%;
-            padding: 8px;
-            margin-top: 5px;
-        }
-        button {
-            margin-top: 20px;
-            padding: 10px;
-            width: 100%;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-        }
-        .result {
-            margin-top: 20px;
-            text-align: center;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    <h2>Iris Flower Prediction</h2>
-    <form method="post" action="/predict">
-        <label>Sepal Length (cm):</label>
-        <input type="number" name="sepal_length" step="0.1" required>
-        
-        <label>Sepal Width (cm):</label>
-        <input type="number" name="sepal_width" step="0.1" required>
-        
-        <label>Petal Length (cm):</label>
-        <input type="number" name="petal_length" step="0.1" required>
-        
-        <label>Petal Width (cm):</label>
-        <input type="number" name="petal_width" step="0.1" required>
-        
-        <button type="submit">Submit & Predict</button>
-    </form>
-    {% if prediction is not none %}
-        <div class="result">Prediction: {{ prediction }}</div>
-    {% endif %}
-</body>
-</html>
-"""
-
-# Route to serve form
-@app.route("/", methods=["GET", "POST"])
+@app.route('/')
 def home():
-    prediction = None
-    if request.method == "POST":
-        try:
+    return render_template('index.html', 
+                         feature_names=feature_names,
+                         target_names=target_names)
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        # Get data from request
+        if request.content_type == 'application/json':
+            data = request.get_json()
+            features = data['features']
+        else:
             features = [
                 float(request.form['sepal_length']),
                 float(request.form['sepal_width']),
                 float(request.form['petal_length']),
                 float(request.form['petal_width'])
             ]
-            pred = model.predict([features])[0]
-            class_names = ['Iris-setosa', 'Iris-versicolor', 'Iris-virginica']
-            prediction = class_names[int(pred)]
-        except Exception as e:
-            prediction = f"Error: {str(e)}"
-    
-    return render_template_string(html_form, prediction=prediction)
-
-# REST API Endpoint
-@app.route("/predict", methods=["POST"])
-def api_predict():
-    if request.is_json:
-        data = request.get_json()
-        try:
-            if "features" not in data or not isinstance(data["features"], list) or len(data["features"]) != 4:
-                return jsonify({"error": "Expected 'features' as a list of 4 numeric values"}), 400
-            
-            features = np.array(data["features"]).reshape(1, -1)
-            prediction = model.predict(features)[0]
+        
+        # Convert to numpy array and ensure correct shape
+        features = np.array(features).reshape(1, -1)
+        
+        # Make prediction
+        prediction = model.predict(features)
+        predicted_class = int(prediction[0])
+        predicted_species = target_names[predicted_class]
+        
+        # Return appropriate response
+        if request.content_type == 'application/json':
             return jsonify({
-                "prediction": int(prediction),
-                "label": class_names[int(prediction)]
+                'predicted_class': predicted_class,
+                'predicted_species': predicted_species,
+                'features_used': dict(zip(feature_names, features[0]))
             })
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    else:
-        return jsonify({"error": "Request must be JSON with 'features' field"}), 400
+        else:
+            return render_template('index.html',
+                                prediction=predicted_species,
+                                feature_names=feature_names,
+                                target_names=target_names,
+                                feature_values=dict(zip(
+                                    ['sepal_length', 'sepal_width', 
+                                     'petal_length', 'petal_width'],
+                                    features[0]
+                                )))
+    
+    except Exception as e:
+        if request.content_type == 'application/json':
+            return jsonify({'error': str(e)}), 400
+        else:
+            return render_template('index.html',
+                                  error=str(e),
+                                  feature_names=feature_names,
+                                  target_names=target_names)
 
-if __name__ == "__main__":
-    import os
-
-port = int(os.environ.get("PORT", 5000))
-app.run(host="0.0.0.0", port=port, debug=True)
+if __name__ == '__main__':
+    app.run(debug=True)
