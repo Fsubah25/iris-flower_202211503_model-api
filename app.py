@@ -1,12 +1,12 @@
 from flask import Flask, request, jsonify, render_template
-import pickle
+import joblib
 import numpy as np
 
 app = Flask(__name__)
 
 # Load the model
-with open('model_202211503.pkl', 'rb') as file:
-    model = pickle.load(file)
+with open('iris_model_202211503.pkl', 'rb') as file:
+    model = joblib.load(file)
 
 # Feature names and target names
 feature_names = ['sepal length (cm)', 'sepal width (cm)', 
